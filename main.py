@@ -1,12 +1,15 @@
 import sys
 import sqlite3
-from PyQt5 import uic
+import os
 from PyQt5.QtWidgets import QMainWindow, QApplication, QTableWidgetItem, QDialog, QMessageBox
+from PyQt5.QtCore import Qt
+from UI.main_ui import Ui_MainWindow
+from UI.addEditCoffeeForm_ui import Ui_AddEditCoffeeForm
 
-class AddEditCoffeeForm(QDialog):
+class AddEditCoffeeForm(QDialog, Ui_AddEditCoffeeForm):
     def __init__(self, parent=None, coffee_id=None):
         super().__init__(parent)
-        uic.loadUi('addEditCoffeeForm.ui', self)
+        self.setupUi(self)
         self.coffee_id = coffee_id
         
         if coffee_id:
@@ -16,7 +19,8 @@ class AddEditCoffeeForm(QDialog):
             self.setWindowTitle('Add Coffee')
     
     def load_coffee_data(self):
-        connection = sqlite3.connect('coffee.sqlite')
+        db_path = os.path.join(os.path.dirname(__file__), 'data', 'coffee.sqlite')
+        connection = sqlite3.connect(db_path)
         cursor = connection.cursor()
         cursor.execute('SELECT * FROM coffee WHERE id = ?', (self.coffee_id,))
         coffee = cursor.fetchone()
@@ -42,10 +46,10 @@ class AddEditCoffeeForm(QDialog):
             self.volumeSpin.value()
         )
 
-class CoffeeWindow(QMainWindow):
+class CoffeeWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super().__init__()
-        uic.loadUi('main.ui', self)
+        self.setupUi(self)
         
         self.addButton.clicked.connect(self.add_coffee)
         self.editButton.clicked.connect(self.edit_coffee)
@@ -54,8 +58,16 @@ class CoffeeWindow(QMainWindow):
         
         self.load_coffee_data()
     
+    def get_db_path(self):
+        return os.path.join(os.path.dirname(__file__), 'data', 'coffee.sqlite')
+    
     def load_coffee_data(self):
-        connection = sqlite3.connect('coffee.sqlite')
+        db_path = self.get_db_path()
+        if not os.path.exists(db_path):
+            QMessageBox.critical(self, 'Error', 'Database file not found!')
+            return
+            
+        connection = sqlite3.connect(db_path)
         cursor = connection.cursor()
         cursor.execute('SELECT * FROM coffee')
         data = cursor.fetchall()
@@ -68,6 +80,7 @@ class CoffeeWindow(QMainWindow):
         for i, row in enumerate(data):
             for j, value in enumerate(row):
                 item = QTableWidgetItem(str(value))
+                item.setFlags(item.flags() & ~Qt.ItemIsEditable)
                 self.tableWidget.setItem(i, j, item)
         
         self.tableWidget.resizeColumnsToContents()
@@ -76,7 +89,8 @@ class CoffeeWindow(QMainWindow):
         dialog = AddEditCoffeeForm(self)
         if dialog.exec_():
             data = dialog.get_data()
-            connection = sqlite3.connect('coffee.sqlite')
+            db_path = self.get_db_path()
+            connection = sqlite3.connect(db_path)
             cursor = connection.cursor()
             cursor.execute('''
                 INSERT INTO coffee (name, roast_level, ground_or_beans, taste_description, price, package_volume)
@@ -97,7 +111,8 @@ class CoffeeWindow(QMainWindow):
         dialog = AddEditCoffeeForm(self, coffee_id)
         if dialog.exec_():
             data = dialog.get_data()
-            connection = sqlite3.connect('coffee.sqlite')
+            db_path = self.get_db_path()
+            connection = sqlite3.connect(db_path)
             cursor = connection.cursor()
             cursor.execute('''
                 UPDATE coffee 
@@ -123,7 +138,8 @@ class CoffeeWindow(QMainWindow):
                                     QMessageBox.Yes | QMessageBox.No)
         
         if reply == QMessageBox.Yes:
-            connection = sqlite3.connect('coffee.sqlite')
+            db_path = self.get_db_path()
+            connection = sqlite3.connect(db_path)
             cursor = connection.cursor()
             cursor.execute('DELETE FROM coffee WHERE id = ?', (coffee_id,))
             connection.commit()
